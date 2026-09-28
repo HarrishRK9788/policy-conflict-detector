@@ -1,0 +1,10 @@
+Title: Encryption Standards Policy
+Last Reviewed: 2018-02-20
+
+All sensitive data at rest must be encrypted using approved cryptographic algorithms.
+Data in transit must be encrypted using TLS 1.0 or higher for compatibility with legacy partner systems.
+Password hashes must use SHA-1 for legacy application compatibility.
+Encryption keys must be rotated on an annual basis and stored in a hardware security module.
+Disk encryption must be enabled on all corporate laptops and mobile devices.
+Email containing regulated data must not be transmitted without encryption.
+Deprecated cipher suites such as RC4 must not be used in any production system.

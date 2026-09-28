@@ -1,0 +1,11 @@
+Title: Network Security Policy
+Last Reviewed: 2025-11-20
+
+VPN split tunneling must not be allowed for any remote employee connecting to internal systems.
+Remote contractors must be allowed VPN split tunneling access when a documented business exception is approved.
+Firewall rules must deny all inbound traffic by default unless explicitly authorized.
+Network segmentation must be used to isolate finance systems from the general corporate network.
+Intrusion detection systems must log all suspicious network traffic for later review.
+Network configuration backups must be retained for a minimum of 30 days.
+Legacy branch office routers still running Windows Server 2008 must be isolated from the core network.
+Guest wireless networks must not have access to internal file shares or servers.

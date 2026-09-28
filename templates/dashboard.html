@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Policy Conflict &amp; Staleness Detector</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark app-navbar">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
+            <i class="bi bi-shield-lock-fill me-2"></i>Policy Conflict &amp; Staleness Detector
+        </a>
+        <div class="d-flex">
+            <a href="{{ url_for('report_preview') }}" class="btn btn-outline-light btn-sm me-2"><i class="bi bi-file-earmark-richtext me-1"></i>Report</a>
+            <a href="{{ url_for('report_pdf') }}" class="btn btn-light btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>Download PDF</a>
+        </div>
+    </div>
+</nav>
+
+<main class="container my-4">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <h2 class="mb-4"><i class="bi bi-speedometer2 me-2 text-primary"></i>Analysis Dashboard</h2>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-2">
+            <div class="stat-card text-center">
+                <div class="stat-value text-primary">{{ results.summary.total_documents }}</div>
+                <div class="stat-label">Policies</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card text-center">
+                <div class="stat-value text-info">{{ results.summary.total_statements }}</div>
+                <div class="stat-label">Statements</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card text-center">
+                <div class="stat-value text-danger">{{ results.summary.total_conflicts }}</div>
+                <div class="stat-label">Conflicts</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card text-center">
+                <div class="stat-value text-warning">{{ results.summary.total_redundancies }}</div>
+                <div class="stat-label">Redundant</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card text-center">
+                <div class="stat-value text-secondary">{{ results.summary.total_stale }}</div>
+                <div class="stat-label">Stale</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card text-center">
+                <div class="stat-value
+                    {% if results.summary.health_score >= 80 %}text-success
+                    {% elif results.summary.health_score >= 50 %}text-warning
+                    {% else %}text-danger{% endif %}">
+                    {{ results.summary.health_score }}
+                </div>
+                <div class="stat-label">Health Score</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-pie-chart me-2 text-primary"></i>Statements by Topic</h5>
+                    <canvas id="topicChart" height="220"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-bar-chart me-2 text-primary"></i>Findings Overview</h5>
+                    <canvas id="findingsChart" height="220"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents Table -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <h5 class="card-title"><i class="bi bi-folder2-open me-2 text-primary"></i>Loaded Policy Documents</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>File</th>
+                            <th>Last Reviewed</th>
+                            <th># Statements</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in results.documents %}
+                        {% set finding = (results.stale_findings | selectattr('source_file', 'equalto', doc.filename) | first) %}
+                        <tr>
+                            <td class="fw-semibold">{{ doc.title }}</td>
+                            <td><code>{{ doc.filename }}</code></td>
+                            <td>{{ doc.last_reviewed or 'Unknown' }}</td>
+                            <td>{{ doc.statement_count }}</td>
+                            <td>
+                                {% if finding and finding.is_stale %}
+                                    <span class="badge text-bg-danger">Stale</span>
+                                {% else %}
+                                    <span class="badge text-bg-success">Current</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conflicts Table -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <h5 class="card-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Conflicts ({{ results.conflicts|length }})</h5>
+            {% if results.conflicts %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Action</th>
+                            <th>Severity</th>
+                            <th>Statement A</th>
+                            <th>Statement B</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in results.conflicts %}
+                        <tr>
+                            <td><span class="badge text-bg-light border">{{ c.topic }}</span></td>
+                            <td>{{ c.action }}</td>
+                            <td>
+                                {% if c.severity == 'HIGH' %}
+                                    <span class="badge text-bg-danger">HIGH</span>
+                                {% else %}
+                                    <span class="badge text-bg-warning text-dark">MEDIUM</span>
+                                {% endif %}
+                            </td>
+                            <td><small><code>{{ c.statement_a.source_file }}</code><br>{{ c.statement_a.text }}</small></td>
+                            <td><small><code>{{ c.statement_b.source_file }}</code><br>{{ c.statement_b.text }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No conflicts detected. Great job keeping policies aligned!</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Redundancy Table -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <h5 class="card-title text-warning"><i class="bi bi-files me-2"></i>Redundant Statements ({{ results.redundancies|length }})</h5>
+            {% if results.redundancies %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Action</th>
+                            <th>Cross-Document</th>
+                            <th>Statement A</th>
+                            <th>Statement B</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in results.redundancies %}
+                        <tr>
+                            <td><span class="badge text-bg-light border">{{ r.topic }}</span></td>
+                            <td>{{ r.action }}</td>
+                            <td>
+                                {% if r.cross_document %}
+                                    <span class="badge text-bg-info">Yes</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">No</span>
+                                {% endif %}
+                            </td>
+                            <td><small><code>{{ r.statement_a.source_file }}</code><br>{{ r.statement_a.text }}</small></td>
+                            <td><small><code>{{ r.statement_b.source_file }}</code><br>{{ r.statement_b.text }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No redundant statements detected.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Staleness Table -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <h5 class="card-title text-secondary"><i class="bi bi-hourglass-split me-2"></i>Staleness Findings</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Document</th>
+                            <th>Last Reviewed</th>
+                            <th>Months Since Review</th>
+                            <th>Deprecated Tech</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in results.stale_findings %}
+                        <tr>
+                            <td class="fw-semibold">{{ f.document_title }}<br><small class="text-muted">{{ f.source_file }}</small></td>
+                            <td>{{ f.last_reviewed or 'Unknown' }}</td>
+                            <td>{{ f.months_since_review if f.months_since_review is not none else '—' }}</td>
+                            <td>
+                                {% for tech in f.deprecated_tech_found %}
+                                    <span class="badge text-bg-dark me-1">{{ tech }}</span>
+                                {% else %}
+                                    <span class="text-muted">None</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% if f.is_stale %}
+                                    <span class="badge text-bg-danger">Stale</span>
+                                {% else %}
+                                    <span class="badge text-bg-success">Current</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graph Relations -->
+    <div class="card shadow-sm border-0 mb-5">
+        <div class="card-body">
+            <h5 class="card-title"><i class="bi bi-diagram-3 me-2 text-primary"></i>Policy Relationship Graph</h5>
+            <p class="text-muted small mb-3">
+                Nodes: {{ results.graph_stats.node_count }} &nbsp;|&nbsp;
+                Edges: {{ results.graph_stats.edge_count }} &nbsp;|&nbsp;
+                Density: {{ results.graph_stats.density }} &nbsp;|&nbsp;
+                Conflict edges: {{ results.graph_stats.relation_counts.conflict }} &nbsp;|&nbsp;
+                Redundant edges: {{ results.graph_stats.relation_counts.redundant }} &nbsp;|&nbsp;
+                Related edges: {{ results.graph_stats.relation_counts.related }}
+            </p>
+            <div id="graphCanvas" class="border rounded p-3 bg-light-subtle" style="min-height: 320px;"></div>
+        </div>
+    </div>
+
+</main>
+
+<footer class="text-center text-muted py-4 small">
+    Policy Conflict &amp; Staleness Detector &mdash; built for cybersecurity governance teams.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script id="graph-data" type="application/json">{{ results.graph | tojson }}</script>
+<script id="topic-data" type="application/json">{{ results.topic_counts | tojson }}</script>
+<script id="findings-data" type="application/json">{{ {
+    "Conflicts": results.summary.total_conflicts,
+    "Redundant": results.summary.total_redundancies,
+    "Stale": results.summary.total_stale,
+    "Healthy Docs": (results.summary.total_documents - results.summary.total_stale)
+} | tojson }}</script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

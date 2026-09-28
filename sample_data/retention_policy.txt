@@ -1,0 +1,10 @@
+Title: Data Retention Policy
+Last Reviewed: 2019-06-15
+
+Customer transaction records must be retained for a minimum of seven years for regulatory compliance.
+Employee records must be retained for the duration of employment plus five years.
+Log files must be retained for at least 90 days to support incident investigation.
+Backup archives must not be retained beyond three years unless subject to a legal hold.
+Personal data must be deleted upon a valid customer erasure request within 30 days.
+Marketing email lists must not retain contact records for customers who have unsubscribed.
+Financial audit logs should be reviewed quarterly by the compliance team.
